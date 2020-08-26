@@ -39,10 +39,18 @@ class FBSConv2d(nn.Module):
         ss = global_avgpool2d(x) # [batch, C1, H1, W1] -> [batch, C1]
         g = self.channel_saliency_predictor(ss) # [batch, C1] -> [batch, C2]
         pi = winner_take_all(g, self.sparsity_ratio) # [batch, C2]
+        
+        x = self.conv(x)  # [batch, C1, H1, W1] -> [batch, C2, H2, W2]
 
-        x = self.conv(x) # [batch, C1, H1, W1] -> [batch, C2, H2, W2]
+        if inference:
+            ones, zeros = torch.ones_like(pi), torch.zeros_like(pi)
+            pre_mask = torch.where(pi != 0, ones, zeros)
+            pre_mask = pre_mask.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, x.size(2), x.size(3))
+            x = x * pre_mask
+
         x = self.bn(x)
-        x = x * pi.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, x.size(2), x.size(3))
+        post_mask = pi.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, x.size(2), x.size(3))
+        x = x * post_mask
         x = F.relu(x)
         
         return x, torch.mean(torch.sum(g, dim = -1)) # E_x[||g_l(x_l-1)||_1]
