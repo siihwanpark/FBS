@@ -14,11 +14,17 @@ class FBSConv2d(nn.Module):
         self.sparsity_ratio = sparsity_ratio
 
         if fbs:
-            raise NotImplementedError()
+            self.channel_saliency_predictor = nn.Linear(in_channels, out_channels)
+            nn.init.kaiming_normal_(self.channel_saliency_predictor.weight, mode='fan_out', nonlinearity='relu')
+            nn.init.constant_(self.channel_saliency_predictor.bias, 1.)
 
-    def forward(self, x):
+            self.bn.weight.requires_grad_(False)
+
+    def forward(self, x, inference=False):
         if self.fbs:
-            raise NotImplementedError()
+            x, g = self.fbs_forward(x, inference)
+            return x, g
+
         else:
             x = self.original_forward(x)
             return x
@@ -29,8 +35,17 @@ class FBSConv2d(nn.Module):
         x = F.relu(x)
         return x
 
-    def fbs_forward(self, x):
-        raise NotImplementedError()
+    def fbs_forward(self, x, inference):
+        ss = global_avgpool2d(x) # [batch, C1, H1, W1] -> [batch, C1]
+        g = self.channel_saliency_predictor(ss) # [batch, C1] -> [batch, C2]
+        pi = winner_take_all(g, self.sparsity_ratio) # [batch, C2]
+
+        x = self.conv(x) # [batch, C1, H1, W1] -> [batch, C2, H2, W2]
+        x = self.bn(x)
+        x = x * pi.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, x.size(2), x.size(3))
+        x = F.relu(x)
+        
+        return x, torch.mean(torch.sum(g, dim = -1)) # E_x[||g_l(x_l-1)||_1]
 
 
 class CifarNet(nn.Module):
@@ -48,20 +63,50 @@ class CifarNet(nn.Module):
         self.pool = nn.AvgPool2d(8)
         self.fc = nn.Linear(192, 10)
 
+        self.fbs = fbs
+        self.sparsity_ratio = sparsity_ratio
+
     # TODO: get g for each layer and calculate lasso
-    def forward(self, x):
-        x = self.layer0(x)
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
-        x = self.layer4(x)
-        x = self.layer5(x)
-        x = self.layer6(x)
-        x = self.layer7(x)
+    def forward(self, x, inference = False):
+        if self.fbs:
+            lasso = 0.
+            x, g = self.layer0(x, inference)
+            lasso += g
+            x, g = self.layer1(x, inference)
+            lasso += g
+            x, g = self.layer2(x, inference)
+            lasso += g
+            x, g = self.layer3(x, inference)
+            lasso += g
+            x, g = self.layer4(x, inference)
+            lasso += g
+            x, g = self.layer5(x, inference)
+            lasso += g
+            x, g = self.layer6(x, inference)
+            lasso += g
+            x, g = self.layer7(x, inference)
+            lasso += g
 
-        x = self.pool(x)
-        x = torch.flatten(x, 1)
-        
-        x = self.fc(x)
+            x = self.pool(x)
+            x = torch.flatten(x, 1)
 
-        return x
+            x = self.fc(x)
+
+            return x, lasso
+
+        else:
+            x = self.layer0(x)
+            x = self.layer1(x)
+            x = self.layer2(x)
+            x = self.layer3(x)
+            x = self.layer4(x)
+            x = self.layer5(x)
+            x = self.layer6(x)
+            x = self.layer7(x)
+
+            x = self.pool(x)
+            x = torch.flatten(x, 1)
+            
+            x = self.fc(x)
+
+            return x

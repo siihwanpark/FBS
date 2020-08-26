@@ -31,7 +31,7 @@ parser.add_argument(
 parser.add_argument(
     '--epochs',
     type=int,
-    default=1000
+    default=500
 )
 parser.add_argument(
     '--batch_size',
@@ -61,6 +61,12 @@ parser.add_argument(
     default='checkpoints'
 )
 
+parser.add_argument(
+    '--pretrained',
+    type=str,
+    default='checkpoints/best_False_1.0.pt'
+)
+
 args = parser.parse_args()
 
 
@@ -76,6 +82,26 @@ criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
 # TODO: initialize current model parameters with previous model parameters
+if args.fbs:
+    if args.sparsity_ratio == 1.0 :
+        base_state_dict = torch.load(args.pretrained)
+        model_state_dict = model.state_dict()
+
+        for k, v in model_state_dict.items():
+            if 'conv' in k:
+                model_state_dict[k] = base_state_dict[k]
+        
+        model.load_state_dict(model_state_dict)
+
+    else:
+        base_state_dict = torch.load(args.pretrained)
+        model_state_dict = model.state_dict()
+
+        for k, v in model_state_dict.items():
+            if 'weight' in k or 'bias' in k :
+                model_state_dict[k] = base_state_dict[k]
+
+        model.load_state_dict(model_state_dict)
 
 best_acc = 0.
 for epoch in range(1, args.epochs+1):
@@ -91,9 +117,12 @@ for epoch in range(1, args.epochs+1):
         img_batch = img_batch.cuda()
         lb_batch = lb_batch.cuda()
 
-        pred_batch = model(img_batch)
-
-        loss = criterion(pred_batch, lb_batch)
+        if not args.fbs:
+            pred_batch = model(img_batch)
+            loss = criterion(pred_batch, lb_batch)
+        else:
+            pred_batch, lasso = model(img_batch)
+            loss = criterion(pred_batch, lb_batch) + lasso * args.lasso_lambda
 
         optimizer.zero_grad()
         loss.backward()
@@ -118,10 +147,13 @@ for epoch in range(1, args.epochs+1):
             img_batch = img_batch.cuda()
             lb_batch = lb_batch.cuda()
 
-            pred_batch = model(img_batch)
-
-            loss = criterion(pred_batch, lb_batch)
-
+            if not args.fbs:
+                pred_batch = model(img_batch)
+                loss = criterion(pred_batch, lb_batch)
+            else:
+                pred_batch, lasso = model(img_batch, True)
+                loss = criterion(pred_batch, lb_batch) + lasso * args.lasso_lambda
+            
             test_loss += loss.item()
             _, pred_lb_batch = pred_batch.max(dim=1)
             total_num += lb_batch.shape[0]

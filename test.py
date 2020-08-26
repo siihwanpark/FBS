@@ -57,7 +57,7 @@ with torch.no_grad():
         img_batch = img_batch.cuda()
         lb_batch = lb_batch.cuda()
 
-        pred_batch = model(img_batch)
+        pred_batch = model(img_batch, True)
 
         _, pred_lb_batch = pred_batch.max(dim=1)
         total_num += lb_batch.shape[0]

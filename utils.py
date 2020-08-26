@@ -5,6 +5,8 @@ import numpy as np
 import argparse
 import torch
 
+from math import ceil
+
 
 def set_seed(seed):
     # for reproducibility.
@@ -32,8 +34,18 @@ def str2bool(v):
 
 
 def global_avgpool2d(x):
-    raise NotImplementedError()
-
+    # input : a tensor with size [batch, C, H, W]
+    x = torch.mean(torch.mean(x, dim = -1), dim = -1)
+    
+    return x # [batch, C]
 
 def winner_take_all(x, sparsity_ratio):
-    raise NotImplementedError()
+    # input : a tensor with size [batch, C]
+    if sparsity_ratio < 1.0:
+        k = ceil((1-sparsity_ratio) * x.size(-1))
+        inactive_idx = (-x).topk(k-1, 1)[1]
+
+        return x.scatter_(1, inactive_idx, 0)
+
+    else:
+        return x
