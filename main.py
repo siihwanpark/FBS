@@ -31,7 +31,7 @@ parser.add_argument(
 parser.add_argument(
     '--epochs',
     type=int,
-    default=200
+    default=500
 )
 parser.add_argument(
     '--batch_size',

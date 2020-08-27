@@ -45,7 +45,7 @@ train_loader, test_loader = get_loader(args.batch_size, args.num_worker)
 model = CifarNet(fbs=args.fbs, sparsity_ratio=args.sparsity_ratio).cuda()
 
 state_dict = torch.load(
-    f'{args.ckpt_path}/backup/best_{args.fbs}_{args.sparsity_ratio}.pt')
+    f'{args.ckpt_path}/best_{args.fbs}_{args.sparsity_ratio}.pt')
 model.load_state_dict(state_dict)
 
 with torch.no_grad():
@@ -58,6 +58,7 @@ with torch.no_grad():
         lb_batch = lb_batch.cuda()
 
         pred_batch, _ = model(img_batch, True)
+        #pred_batch = model(img_batch)
 
         _, pred_lb_batch = pred_batch.max(dim=1)
         total_num += lb_batch.shape[0]
