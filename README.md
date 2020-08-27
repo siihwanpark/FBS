@@ -18,10 +18,11 @@ PyTorch Implementation of the paper 'Dynamic Channel Pruning : Feature Boosting 
 
 ### Results
 <p float="left">
-  <img src="figures/fig3a.png" width="430" />
-  <img src="figures/fig3b_deco.png" width="430" />
+  <img src="figures/fig3a.png" />
+  <img src="figures/fig3b_deco.png"/>
 </p>
 
 ### References
 [1] Gao, Xitong, et al. "Dynamic channel pruning: Feature boosting and suppression." arXiv preprint arXiv:1810.05331 (ICLR 2019).
+
 [2] Ju Hyuk Lee (sehkmg), FBS-torch, GitHub Repository, 2020. (https://github.com/sehkmg/FBS-torch)
