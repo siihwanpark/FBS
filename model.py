@@ -22,24 +22,33 @@ class FBSConv2d(nn.Module):
 
     def forward(self, x, inference=False):
         if self.fbs:
-            x, g = self.fbs_forward(x, inference)
-            return x, g
+            x, g, MACs = self.fbs_forward(x, inference)
+            return x, g, MACs
 
         else:
-            x = self.original_forward(x)
-            return x
+            x, MACs = self.original_forward(x)
+            return x, MACs
 
     def original_forward(self, x):
+        active_channels_in = (x.abs().sum(dim=-1).sum(dim=-1) > 1e-15).sum(dim=-1)
         x = self.conv(x)
+        active_channels_out = (x.abs().sum(dim=-1).sum(dim=-1) > 1e-15).sum(dim=-1)
+        height = x.shape[2]
+        width = x.shape[3]
+
+        MACs = 9 * active_channels_in * active_channels_out * height * width
+
         x = self.bn(x)
         x = F.relu(x)
-        return x
+        
+        return x, MACs
 
     def fbs_forward(self, x, inference):
         ss = global_avgpool2d(x) # [batch, C1, H1, W1] -> [batch, C1]
         g = self.channel_saliency_predictor(ss) # [batch, C1] -> [batch, C2]
         pi = winner_take_all(g, self.sparsity_ratio) # [batch, C2]
         
+        active_channels_in = (x.abs().sum(dim=-1).sum(dim=-1) > 1e-15).sum(dim=-1)
         x = self.conv(x)  # [batch, C1, H1, W1] -> [batch, C2, H2, W2]
 
         if inference:
@@ -48,12 +57,18 @@ class FBSConv2d(nn.Module):
             pre_mask = pre_mask.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, x.size(2), x.size(3))
             x = x * pre_mask
 
+        active_channels_out = (x.abs().sum(dim=-1).sum(dim=-1) > 1e-15).sum(dim=-1)
+        height = x.shape[2]
+        width = x.shape[3]
+
+        MACs = 9 * active_channels_in * active_channels_out * height * width
+
         x = self.bn(x)
         post_mask = pi.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, x.size(2), x.size(3))
         x = x * post_mask
         x = F.relu(x)
         
-        return x, torch.mean(torch.sum(g, dim = -1)) # E_x[||g_l(x_l-1)||_1]
+        return x, torch.mean(torch.sum(g, dim = -1)), MACs # E_x[||g_l(x_l-1)||_1]
 
 
 class CifarNet(nn.Module):
@@ -77,22 +92,39 @@ class CifarNet(nn.Module):
     # TODO: get g for each layer and calculate lasso
     def forward(self, x, inference = False):
         if self.fbs:
+            MACs_total = 0
+
             lasso = 0.
-            x, g = self.layer0(x, inference)
+            x, g, MACs = self.layer0(x, inference)
+            MACs_total += MACs
             lasso += g
-            x, g = self.layer1(x, inference)
+
+            x, g, MACs = self.layer1(x, inference)
+            MACs_total += MACs
             lasso += g
-            x, g = self.layer2(x, inference)
+
+            x, g, MACs = self.layer2(x, inference)
+            MACs_total += MACs
             lasso += g
-            x, g = self.layer3(x, inference)
+
+            x, g, MACs = self.layer3(x, inference)
+            MACs_total += MACs
             lasso += g
-            x, g = self.layer4(x, inference)
+
+            x, g, MACs = self.layer4(x, inference)
+            MACs_total += MACs
             lasso += g
-            x, g = self.layer5(x, inference)
+
+            x, g, MACs = self.layer5(x, inference)
+            MACs_total += MACs
             lasso += g
-            x, g = self.layer6(x, inference)
+
+            x, g, MACs = self.layer6(x, inference)
+            MACs_total += MACs
             lasso += g
-            x, g = self.layer7(x, inference)
+
+            x, g, MACs = self.layer7(x, inference)
+            MACs_total += MACs
             lasso += g
 
             x = self.pool(x)
@@ -100,21 +132,38 @@ class CifarNet(nn.Module):
 
             x = self.fc(x)
 
-            return x, lasso
+            return x, lasso, MACs_total
 
         else:
-            x = self.layer0(x)
-            x = self.layer1(x)
-            x = self.layer2(x)
-            x = self.layer3(x)
-            x = self.layer4(x)
-            x = self.layer5(x)
-            x = self.layer6(x)
-            x = self.layer7(x)
+            MACs_total = 0
+
+            x, MACs = self.layer0(x)
+            MACs_total += MACs
+
+            x, MACs = self.layer1(x)
+            MACs_total += MACs
+
+            x, MACs = self.layer2(x)
+            MACs_total += MACs
+
+            x, MACs = self.layer3(x)
+            MACs_total += MACs
+
+            x, MACs = self.layer4(x)
+            MACs_total += MACs
+
+            x, MACs = self.layer5(x)
+            MACs_total += MACs
+
+            x, MACs = self.layer6(x)
+            MACs_total += MACs
+
+            x, MACs = self.layer7(x)
+            MACs_total += MACs
 
             x = self.pool(x)
             x = torch.flatten(x, 1)
             
             x = self.fc(x)
 
-            return x
+            return x, MACs_total

@@ -51,19 +51,27 @@ model.load_state_dict(state_dict)
 with torch.no_grad():
     total_num = 0
     correct_num = 0
+    MACs_total = 0
 
     model.eval()
     for img_batch, lb_batch in tqdm(test_loader, total=len(test_loader)):
         img_batch = img_batch.cuda()
         lb_batch = lb_batch.cuda()
 
-        pred_batch, _ = model(img_batch, True)
-        #pred_batch = model(img_batch)
+        #pred_batch, MACs = model(img_batch)
+        pred_batch, _, MACs = model(img_batch, True)
 
         _, pred_lb_batch = pred_batch.max(dim=1)
         total_num += lb_batch.shape[0]
         correct_num += pred_lb_batch.eq(lb_batch).sum().item()
 
-    test_acc = 100.*correct_num/total_num
+        MACs_total += MACs.sum().item()
+    
+    test_acc = correct_num/total_num
+    MACs_avg = MACs_total/total_num
 
-print(f'Test accuracy: {test_acc}%')
+print(f'Test accuracy: {test_acc}')
+print(f'MACs: {MACs_avg}')
+
+with open('fig3a/results.tsv', 'a') as f:
+    f.write(f'{args.fbs}\t{args.sparsity_ratio}\t{test_acc}\t{MACs_avg}\n')
