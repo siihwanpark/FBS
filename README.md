@@ -18,6 +18,6 @@ PyTorch Implementation of the paper 'Dynamic Channel Pruning : Feature Boosting 
 
 ### Results
 <p float="left">
-  <img src="figures/fig3a.png" width="450" />
-  <img src="figures/fig3b_deco.png" width="450" />
+  <img src="figures/fig3a.png" width="430" />
+  <img src="figures/fig3b_deco.png" width="430" />
 </p>
