@@ -17,10 +17,7 @@ PyTorch Implementation of the paper 'Dynamic Channel Pruning : Feature Boosting 
 * Calculate MACs only for convolutional layers.
 
 ### Results
-* Figure 3(a)
-
-<img src="figures/fig3a.png" width="50%">
-
-* Figure 3(b)
-
-<img src="figures/fig3b_deco.png" width="50%">
+<p float="left">
+  <img src="figures/fig3a.png" width="450" />
+  <img src="figures/fig3b_deco.png" width="450" />
+</p>
