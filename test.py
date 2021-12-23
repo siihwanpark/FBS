@@ -38,6 +38,12 @@ parser.add_argument(
     default='checkpoints'
 )
 
+parser.add_argument(
+    '--target_cls',
+    type=int,
+    default=0
+)
+
 args = parser.parse_args()
 
 
@@ -51,19 +57,38 @@ model.load_state_dict(state_dict)
 with torch.no_grad():
     total_num = 0
     correct_num = 0
+    cls_active_prob_list = [0]*8
 
     model.eval()
     for img_batch, lb_batch in tqdm(test_loader, total=len(test_loader)):
         img_batch = img_batch.cuda()
         lb_batch = lb_batch.cuda()
 
-        pred_batch, _ = model(img_batch, True)
-        #pred_batch = model(img_batch)
+        cls_mask = lb_batch == args.target_cls
+
+        if cls_mask.sum().item() == 0:
+            continue
+
+        img_batch = img_batch[cls_mask]
+        lb_batch = lb_batch[cls_mask]
+
+        pred_batch, lasso, active_channels_list = model(img_batch, True)
 
         _, pred_lb_batch = pred_batch.max(dim=1)
         total_num += lb_batch.shape[0]
         correct_num += pred_lb_batch.eq(lb_batch).sum().item()
 
+        for i in range(8):
+            cls_active_prob_list[i] += active_channels_list[i].sum(dim=0)
+    
     test_acc = 100.*correct_num/total_num
 
+    for i in range(8):
+        cls_active_prob_list[i] /= total_num
+
 print(f'Test accuracy: {test_acc}%')
+
+for i in range(8):
+    with open(f'fig3b/conv{i}.tsv', 'a') as f:
+        f.write('\t'.join([str(prob) for prob in cls_active_prob_list[i].tolist()]))
+        f.write('\n')
